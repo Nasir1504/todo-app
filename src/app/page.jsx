@@ -5,40 +5,61 @@ export default function Home() {
   const [todos, setTodos] = useState([]);
   const [text, setText] = useState("");
   const [files, setFiles] = useState([]);
+  const [loading, setLoading] = useState(false);
   const fileInputRef = useRef();
 
   useEffect(() => {
     fetch("/api/todos")
       .then((res) => res.json())
-      .then(setTodos);
+      .then(setTodos)
+      .catch((err) => console.error("Failed to fetch todos:", err));
   }, []);
 
   const addTodo = async (e) => {
     e.preventDefault();
+    if (!text.trim()) return;
+
+    setLoading(true);
     const formData = new FormData();
     formData.append("text", text);
     [...files].forEach((f) => formData.append("files", f));
 
-    const res = await fetch("/api/todos", { method: "POST", body: formData });
-    if (!res.ok) {
-      alert("Error adding todo");
-      return;
+    try {
+      const res = await fetch("/api/todos", { method: "POST", body: formData });
+      if (!res.ok) {
+        alert("Error adding todo");
+        setLoading(false);
+        return;
+      }
+      const newTodo = await res.json();
+      setTodos([...todos, newTodo]);
+      setText("");
+      setFiles([]);
+      if (fileInputRef.current) fileInputRef.current.value = null;
+    } catch (err) {
+      console.error("Add todo error:", err);
+      alert("Failed to add todo");
+    } finally {
+      setLoading(false);
     }
-
-    const newTodo = await res.json();
-    setTodos([...todos, newTodo]);
-    setText("");
-    setFiles([]);
-    fileInputRef.current.value = null;
   };
 
   const deleteTodo = async (id) => {
-    await fetch("/api/todos", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
-    setTodos(todos.filter((t) => t.id !== id));
+    try {
+      const res = await fetch("/api/todos", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) {
+        alert("Failed to delete todo");
+        return;
+      }
+      setTodos(todos.filter((t) => t.id !== id));
+    } catch (err) {
+      console.error("Delete todo error:", err);
+      alert("Failed to delete todo");
+    }
   };
 
   return (
@@ -59,7 +80,13 @@ export default function Home() {
           onChange={(e) => setFiles(e.target.files)}
           className="border p-2 rounded"
         />
-        <button className="bg-blue-500 text-white p-2 rounded">Add Todo</button>
+        <button
+          type="submit"
+          className="bg-blue-500 text-white p-2 rounded disabled:opacity-50"
+          disabled={loading || !text.trim()}
+        >
+          {loading ? "Adding..." : "Add Todo"}
+        </button>
       </form>
 
       <ul className="space-y-4">
@@ -75,7 +102,7 @@ export default function Home() {
               </button>
             </div>
             <div className="mt-2 space-y-1">
-              {todo.attachments.map((file, idx) => (
+              {(todo.attachments || []).map((file, idx) => (
                 <div key={idx}>
                   {file.type.startsWith("image/") ? (
                     <img src={file.url} alt={file.name} className="w-32 rounded" />

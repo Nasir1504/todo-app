@@ -6,28 +6,33 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-let todos = []; // in-memory storage
+// In-memory storage for todos
+let todos = [];
 
+// GET all todos
 export async function GET() {
-  return Response.json(todos);
+  return new Response(JSON.stringify(todos), { status: 200 });
 }
 
+// Add new todo
 export async function POST(req) {
   const formData = await req.formData();
   const text = formData.get("text");
   const files = formData.getAll("files");
 
-  if (!text) return new Response("Text is required", { status: 400 });
+  if (!text) {
+    return new Response("Text is required", { status: 400 });
+  }
 
   const attachments = [];
 
   for (const file of files) {
-    if (file.size > 5 * 1024 * 1024)
+    if (file.size > 5 * 1024 * 1024) {
       return new Response("File too large (max 5MB)", { status: 400 });
-
-    const buffer = Buffer.from(await file.arrayBuffer());
+    }
 
     try {
+      const buffer = Buffer.from(await file.arrayBuffer());
       const base64 = `data:${file.type};base64,${buffer.toString("base64")}`;
       const result = await cloudinary.uploader.upload(base64, {
         resource_type: "auto",
@@ -50,11 +55,17 @@ export async function POST(req) {
   const newTodo = { id: Date.now(), text, attachments };
   todos.push(newTodo);
 
-  return Response.json(newTodo);
+  return new Response(JSON.stringify(newTodo), { status: 201 });
 }
 
+// Delete a todo
 export async function DELETE(req) {
-  const { id } = await req.json();
-  todos = todos.filter((todo) => todo.id !== id);
-  return Response.json({ success: true });
+  try {
+    const { id } = await req.json();
+    todos = todos.filter((todo) => todo.id !== id);
+    return new Response(JSON.stringify({ success: true }), { status: 200 });
+  } catch (err) {
+    console.error("Delete error:", err);
+    return new Response("Failed to delete todo", { status: 500 });
+  }
 }
