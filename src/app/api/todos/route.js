@@ -1,49 +1,50 @@
-import { promises as fs } from "fs";
-import path from "path";
+import { v2 as cloudinary } from "cloudinary";
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 let todos = []; // in-memory storage
-
-const uploadDir = path.join(process.cwd(), "public", "uploads");
-
-async function ensureUploadDir() {
-  try {
-    await fs.mkdir(uploadDir, { recursive: true });
-  } catch (err) {}
-}
 
 export async function GET() {
   return Response.json(todos);
 }
 
 export async function POST(req) {
-  await ensureUploadDir();
   const formData = await req.formData();
-
   const text = formData.get("text");
   const files = formData.getAll("files");
 
-  if (!text) {
-    return new Response("Text is required", { status: 400 });
-  }
+  if (!text) return new Response("Text is required", { status: 400 });
 
   const attachments = [];
 
   for (const file of files) {
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > 5 * 1024 * 1024)
       return new Response("File too large (max 5MB)", { status: 400 });
-    }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const filePath = path.join(uploadDir, file.name);
 
-    await fs.writeFile(filePath, buffer);
+    try {
+      const base64 = `data:${file.type};base64,${buffer.toString("base64")}`;
+      const result = await cloudinary.uploader.upload(base64, {
+        resource_type: "auto",
+        folder: "todos",
+        public_id: `${Date.now()}_${file.name}`,
+      });
 
-    attachments.push({
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      path: `/uploads/${file.name}`,
-    });
+      attachments.push({
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        url: result.secure_url,
+      });
+    } catch (err) {
+      console.error("Cloudinary upload error:", err);
+      return new Response("File upload failed", { status: 500 });
+    }
   }
 
   const newTodo = { id: Date.now(), text, attachments };

@@ -1,13 +1,16 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export default function Home() {
   const [todos, setTodos] = useState([]);
   const [text, setText] = useState("");
   const [files, setFiles] = useState([]);
+  const fileInputRef = useRef();
 
   useEffect(() => {
-    fetch("/api/todos").then((res) => res.json()).then(setTodos);
+    fetch("/api/todos")
+      .then((res) => res.json())
+      .then(setTodos);
   }, []);
 
   const addTodo = async (e) => {
@@ -26,11 +29,13 @@ export default function Home() {
     setTodos([...todos, newTodo]);
     setText("");
     setFiles([]);
+    fileInputRef.current.value = null;
   };
 
   const deleteTodo = async (id) => {
     await fetch("/api/todos", {
       method: "DELETE",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     });
     setTodos(todos.filter((t) => t.id !== id));
@@ -50,6 +55,7 @@ export default function Home() {
         <input
           type="file"
           multiple
+          ref={fileInputRef}
           onChange={(e) => setFiles(e.target.files)}
           className="border p-2 rounded"
         />
@@ -72,11 +78,7 @@ export default function Home() {
               {todo.attachments.map((file, idx) => (
                 <div key={idx}>
                   {file.type.startsWith("image/") ? (
-                    <img
-                      src={file.path}
-                      alt={file.name}
-                      className="w-32 rounded"
-                    />
+                    <img src={file.url} alt={file.name} className="w-32 rounded" />
                   ) : (
                     <p className="text-sm">
                       {file.name} ({(file.size / 1024).toFixed(1)} KB)
